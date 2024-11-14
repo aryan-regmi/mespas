@@ -4,8 +4,6 @@ const Allocator = std.mem.Allocator;
 const Queue = lib.Queue;
 const Thread = std.Thread;
 
-// TODO: Anything can enqueue but only consumer can dequeue
-//
 /// Multiple producer, single consumer FIFO queue.
 pub fn Mpsc(comptime T: type) type {
     return struct {
@@ -34,6 +32,24 @@ pub fn Mpsc(comptime T: type) type {
             };
         }
 
+        /// Creates a multiple producer single consumer queue with the specified capacity.
+        pub fn initCapacity(
+            allocator: Allocator,
+            capacity: usize,
+        ) !Self {
+            return Self{
+                .allocator = allocator,
+                .queue = try Queue(T).initCapacity(allocator, capacity),
+                .mutex = Thread.Mutex{},
+                .received = false,
+                .recv_cond = Thread.Condition{},
+            };
+        }
+
+        pub fn deinit(self: *Self) void {
+            self.queue.deinit();
+        }
+
         /// Creates a new asynchronous channel.
         pub fn channel(self: *Self) Channel(T) {
             return Channel(T){
@@ -44,6 +60,9 @@ pub fn Mpsc(comptime T: type) type {
     };
 }
 
+/// The part of `Channel` that's responsible for sending.
+///
+/// Messages can be sent through this channel with `send`.
 pub fn Producer(comptime T: type) type {
     return struct {
         const Self = @This();
@@ -56,9 +75,11 @@ pub fn Producer(comptime T: type) type {
             mutex.lock();
             defer mutex.unlock();
 
-            // TODO: send logic here!
-            std.log.debug("Sending {any}", .{value});
+            // Add to the queue
+            try self.mpsc.queue.enqueue(value);
+            std.log.debug("Sent {any}", .{value});
 
+            // Signal receiver to not block
             self.mpsc.received = true;
             self.mpsc.recv_cond.signal(); // change .signal() to .broadcast()?
         }
@@ -70,6 +91,10 @@ pub fn Producer(comptime T: type) type {
     };
 }
 
+/// The receiving half of `Channel`.
+/// This half can only be owned by one thread.
+///
+/// Messages sent to the channel can be retrieved using `recv`.
 pub fn Consumer(comptime T: type) type {
     return struct {
         const Self = @This();
@@ -77,7 +102,7 @@ pub fn Consumer(comptime T: type) type {
         mpsc: *Mpsc(T),
 
         /// Blocks until a message is available.
-        pub fn recv(self: *Self) !void {
+        pub fn recv(self: *Self) !T {
             var mutex = self.mpsc.mutex;
             mutex.lock();
             defer mutex.unlock();
@@ -86,8 +111,10 @@ pub fn Consumer(comptime T: type) type {
                 self.mpsc.recv_cond.wait(&mutex);
             }
 
-            // TODO: recv logic here!
-            std.log.debug("Received", .{});
+            // Grab message from queue
+            const received = try self.mpsc.queue.dequeue();
+            std.log.debug("Received: {}", .{received});
+            return received;
         }
     };
 }

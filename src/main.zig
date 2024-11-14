@@ -8,7 +8,7 @@ const Producer = lib.mpsc.Producer;
 
 fn runProducer(producer: *Producer(u8), value: u8) void {
     producer.send(value) catch |err| {
-        std.log.err("[THREAD] Error: {}", .{err});
+        std.log.err("[Producer] error: {}", .{err});
     };
 }
 
@@ -17,10 +17,22 @@ pub fn main() !void {
     const allocator = gpa.allocator();
     defer _ = gpa.deinit();
 
-    var mpsc = Mpsc(u8).init(allocator);
-    var channel = mpsc.channel();
+    var mpsc = try Mpsc(u8).initCapacity(allocator, 10);
+    defer mpsc.deinit();
 
-    const thread = try Thread.spawn(.{}, runProducer, .{ &channel.producer, 42 });
-    try channel.consumer.recv();
-    thread.join();
+    var channel = mpsc.channel();
+    const num_threads = 4;
+    var thread_handles: [num_threads]Thread = undefined;
+    for (0..num_threads) |i| {
+        thread_handles[i] = try Thread.spawn(.{}, runProducer, .{ &channel.producer, 42 });
+    }
+    for (thread_handles) |thread| {
+        thread.join();
+    }
+
+    for (0..num_threads) |_| {
+        _ = channel.consumer.recv() catch |err| {
+            std.log.err("[Consumer] error: {}", .{err});
+        };
+    }
 }

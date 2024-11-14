@@ -25,7 +25,7 @@ pub fn Queue(comptime T: type) type {
         head: usize = 0,
 
         /// Index of the back of the queue.
-        tail: usize = undefined,
+        tail: ?usize = null,
 
         /// Creates a new, empty queue.
         pub fn init(allocator: Allocator) Self {
@@ -74,8 +74,8 @@ pub fn Queue(comptime T: type) type {
         pub fn enqueue(self: *Self, item: T) !void {
             // Allocate space if the capacity is 0
             if (self.capacity == 0) {
-                self.items = try self.allocator.alloc(T, 1);
-                self.capacity = 1;
+                self.items = try self.allocator.alloc(T, 2);
+                self.capacity = 2;
             }
 
             // Resize if the queue is full
@@ -92,13 +92,16 @@ pub fn Queue(comptime T: type) type {
             }
 
             // Update tail and insert item
-            if (self.tail == undefined) {
+            // std.log.warn("tail: {}", .{self.tail});
+            if (self.tail == null) {
                 self.tail = 0;
+                // std.log.warn("HERE", .{});
             } else {
-                self.tail = (self.tail + 1) % self.capacity;
+                self.tail = (self.tail.? + 1) % self.capacity;
             }
-            self.items[self.tail] = item;
+            self.items[self.tail.?] = item;
             self.size += 1;
+            // std.log.warn("tail: {},items: {any}", .{ self.tail, self.items });
         }
 
         /// Returns the first element without removing it from the queue.
@@ -126,9 +129,9 @@ test "Create queue" {
 
     try queue.enqueue(42);
     try testing.expectEqual(1, queue.size);
-    try testing.expectEqual(1, queue.capacity);
+    try testing.expectEqual(2, queue.capacity);
     try testing.expectEqual(42, queue.peek());
-    try testing.expect(queue.isFull());
+    try testing.expect(!queue.isFull());
 
     try queue.enqueue(55);
     try testing.expectEqual(2, queue.size);
