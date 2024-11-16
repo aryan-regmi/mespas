@@ -7,6 +7,10 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    _ = b.addModule("network", .{
+        .root_source_file = b.path("src/lib.zig"),
+    });
+
     // Library
     // ==========================
     const lib = b.addStaticLibrary(.{
