@@ -15,7 +15,7 @@ pub fn Mpsc(comptime T: type) type {
 
         mutex: Thread.Mutex,
 
-        received: bool,
+        received: bool = false,
 
         recv_cond: Thread.Condition,
 
@@ -27,7 +27,6 @@ pub fn Mpsc(comptime T: type) type {
                 .allocator = allocator,
                 .queue = Queue(T).init(allocator),
                 .mutex = Thread.Mutex{},
-                .received = false,
                 .recv_cond = Thread.Condition{},
             };
         }
@@ -41,7 +40,6 @@ pub fn Mpsc(comptime T: type) type {
                 .allocator = allocator,
                 .queue = try Queue(T).initCapacity(allocator, capacity),
                 .mutex = Thread.Mutex{},
-                .received = false,
                 .recv_cond = Thread.Condition{},
             };
         }
@@ -77,10 +75,9 @@ pub fn Producer(comptime T: type) type {
 
             // Add to the queue
             try self.mpsc.queue.enqueue(value);
-            std.log.debug("Sent {any}", .{value});
+            self.mpsc.received = true;
 
             // Signal receiver to not block
-            self.mpsc.received = true;
             self.mpsc.recv_cond.signal(); // change .signal() to .broadcast()?
         }
 
@@ -113,7 +110,15 @@ pub fn Consumer(comptime T: type) type {
 
             // Grab message from queue
             const received = try self.mpsc.queue.dequeue();
-            std.log.debug("Received: {}", .{received});
+            return received;
+        }
+
+        /// Attempts to return a pending value without blocking.
+        pub fn tryRecv(self: *Self) !T {
+            var mutex = self.mpsc.mutex;
+            mutex.lock();
+            defer mutex.unlock();
+            const received = self.mpsc.queue.dequeue() catch return error.EmptyMessageBuffer;
             return received;
         }
     };

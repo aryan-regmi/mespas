@@ -1,5 +1,5 @@
 const std = @import("std");
-const lib = @import("lib.zig");
+const lib = @import("src/lib.zig");
 const Allocator = std.mem.Allocator;
 const Queue = lib.Queue;
 const Thread = std.Thread;
@@ -10,6 +10,7 @@ fn runProducer(producer: *Producer(u8), value: u8) void {
     producer.send(value) catch |err| {
         std.log.err("[Producer] error: {}", .{err});
     };
+    std.log.debug("Sent: {}", .{value});
 }
 
 pub fn main() !void {
@@ -31,8 +32,10 @@ pub fn main() !void {
     }
 
     for (0..num_threads) |_| {
-        _ = channel.consumer.recv() catch |err| {
+        const val = channel.consumer.recv() catch |err| {
             std.log.err("[Consumer] error: {}", .{err});
+            return;
         };
+        std.log.debug("Received: {}", .{val});
     }
 }

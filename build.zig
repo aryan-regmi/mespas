@@ -19,14 +19,14 @@ pub fn build(b: *std.Build) void {
 
     // Executable
     // ============================
-    const exe = b.addExecutable(.{
+    const example = b.addExecutable(.{
         .name = "mespas-bin",
-        .root_source_file = b.path("src/main.zig"),
+        .root_source_file = b.path("example.zig"),
         .target = target,
         .optimize = optimize,
     });
-    b.installArtifact(exe);
-    const run_cmd = b.addRunArtifact(exe);
+    b.installArtifact(example);
+    const run_cmd = b.addRunArtifact(example);
     run_cmd.step.dependOn(b.getInstallStep());
     const run_step = b.step("run", "Run");
     run_step.dependOn(&run_cmd.step);
